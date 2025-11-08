@@ -4,7 +4,6 @@ import RideView from '../views/RideView.vue'
 import RidePauseView from '../views/RidePauseView.vue'
 import RideFinishView from '../views/RideFinishView.vue'
 import HistoryView from '../views/HistoryView.vue'
-import StationsMapView from '../views/StationsMapView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -38,11 +37,6 @@ const router = createRouter({
       name: 'history',
       component: HistoryView
     },
-    {
-      path: '/stations',
-      name: 'stations',
-      component: StationsMapView
-    }
   ]
 })
 

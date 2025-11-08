@@ -1,18 +1,14 @@
 <template>
-    <MapView :center="{ lat: 25.0374865, lng: 121.5647688 }" :zoom="16"/>
+  <div class="w-full flex flex-col items-center">
+    <WeatherCard class="fixed z-10"/>
+    <MapView :zoom="16" :geojson-url="geojson" />
+  </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
-import { useStats } from '../composables/useStats'
-import { useWeather } from '../composables/useWeather'
+import { ref } from 'vue'
 import MapView from '../components/MapView.vue'
+import WeatherCard from '../components/WeatherCard.vue'
 
-const { rideHistory, monthlyStats, loadRides } = useStats()
-const { weather, loading: weatherLoading, error: weatherError, fetchWeather } = useWeather()
-
-onMounted(async () => {
-  await loadRides()
-  await fetchWeather()
-})
+const geojson = ref("/map.geojson")
 </script>

@@ -10,7 +10,25 @@
       "properties": {
         "id": 1,
         "name": "臺北市政府親子劇場",
-        "site": "110台北市信義區市府路1號市府大樓"
+        "site": "110台北市信義區市府路1號市府大樓",
+        "icon": "green",
+        "available_bikes": 8,
+        "available_docks": 12
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.535286, 25.021661]
+      },
+      "properties": {
+        "id": 1,
+        "name": "臺大綜合體育館",
+        "site": "復興南路二段235號前",
+        "icon": "green",
+        "available_bikes": 5,
+        "available_docks": 15
       }
     },
     {
@@ -22,7 +40,10 @@
       "properties": {
         "id": 2,
         "name": "誠品信義店",
-        "site": "110台北市信義區松高路11號"
+        "site": "110台北市信義區松高路11號",
+        "icon": "red",
+        "available_bikes": 2,
+        "available_docks": 18
       }
     },
     {
@@ -34,7 +55,26 @@
       "properties": {
         "id": 3,
         "name": "蔦屋書店信義店",
-        "site": "110台北市信義區忠孝東路五段8號"
+        "site": "110台北市信義區忠孝東路五段8號",
+        "icon": "yellow",
+        "available_bikes": 10,
+        "available_docks": 6
+      }
+    }
+    ,
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.5665, 25.0385]
+      },
+      "properties": {
+        "id": 4,
+        "name": "示例站點 (灰色)",
+        "site": "示例地址",
+        "icon": "grey",
+        "available_bikes": 0,
+        "available_docks": 20
       }
     }
   ]
