@@ -1,28 +1,39 @@
 <template>
-  <div class="map-container">
-    <div ref="mapDiv" class="map"></div>
-    <div v-if="loading" class="map-loading">載入地圖中...</div>
-    
+  <div class="relative w-full h-full">
+    <div ref="mapDiv" class="w-full h-full"></div>
+
+    <div v-if="loading" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-8 py-4 rounded-lg shadow-md font-medium z-50">
+      載入地圖中...
+    </div>
+
     <!-- GPS Location Button -->
-    <div v-if="!loading && showGpsButton" class="gps-button" @click="getCurrentLocation">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <button
+      v-if="!loading && showGpsButton"
+      @click="getCurrentLocation"
+      class="absolute top-[15vh] right-5 bg-white w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors z-20 hover:bg-gray-100 active:bg-gray-200"
+      aria-label="取得目前位置"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-700">
         <circle cx="12" cy="12" r="10"></circle>
         <circle cx="12" cy="12" r="3"></circle>
       </svg>
-    </div>
+    </button>
 
     <!-- Selected Marker Info Card -->
-    <div v-if="selectedMarker" class="marker-info-card">
-      <div class="info-content">
-        <h3>{{ selectedMarker.name || selectedMarker.title }}</h3>
-        <p v-if="selectedMarker.site || selectedMarker.address">
+    <div
+      v-if="selectedMarker"
+      class="absolute bottom-5 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded-xl shadow-lg max-w-[90%] w-[85%] md:w-[400px] md:p-6 z-40 flex justify-between items-start gap-4"
+    >
+      <div class="flex-1">
+        <h3 class="m-0 mb-2 text-lg font-semibold text-gray-800">{{ selectedMarker.name || selectedMarker.title }}</h3>
+        <p v-if="selectedMarker.site || selectedMarker.address" class="m-0 my-1 text-sm text-gray-500">
           📍 {{ selectedMarker.site || selectedMarker.address }}
         </p>
-        <p v-if="selectedMarker.distance" class="distance">
+        <p v-if="selectedMarker.distance" class="m-0 my-1 text-sm text-indigo-500 font-medium">
           {{ selectedMarker.distance }} 公里
         </p>
       </div>
-      <button class="close-btn" @click="selectedMarker = null">✕</button>
+      <button @click="selectedMarker = null" class="bg-transparent border-0 p-0 text-2xl text-gray-400 leading-none hover:text-gray-800 cursor-pointer" aria-label="關閉資訊卡">✕</button>
     </div>
   </div>
 </template>
@@ -42,11 +53,6 @@ const props = defineProps({
   markers: {
     type: Array,
     default: () => []
-  },
-  apiKey: {
-    type: String,
-    required: false,
-    default: ''
   },
   geojsonUrl: {
     type: String,
@@ -85,7 +91,7 @@ const loadGoogleMapsScript = () => {
     }
 
     const script = document.createElement('script')
-    const apiKey = props.apiKey || 'YOUR_API_KEY'
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY'
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`
     script.async = true
     script.defer = true
@@ -101,11 +107,6 @@ const loadGoogleMapsScript = () => {
 
 const initMap = async () => {
   try {
-    // Check if API key is set
-    if (!props.apiKey || props.apiKey === 'YOUR_API_KEY') {
-      console.warn('⚠️ Google Maps API Key not set. Please add VITE_GOOGLE_MAPS_API_KEY to your .env file')
-      console.info('📖 See MAPVIEW_SETUP.md for instructions')
-    }
     
     await loadGoogleMapsScript()
     
@@ -113,6 +114,7 @@ const initMap = async () => {
       center: props.center,
       zoom: props.zoom,
       mapTypeId: props.mapTypeId,
+      disableDefaultUI: true,
       streetViewControl: false,
       mapTypeControl: false,
       fullscreenControl: false,
@@ -163,17 +165,47 @@ const loadGeoJsonMarkers = async () => {
 
 const createMarkers = (markersList) => {
   // Clear existing markers
-  googleMarkers.value.forEach(marker => marker.setMap(null))
+  googleMarkers.value.forEach(marker => {
+    if (!marker) return
+    if (typeof marker.setMap === 'function') {
+      marker.setMap(null)
+    } else if ('map' in marker) {
+      // AdvancedMarkerElement may use the `map` property
+      try { marker.map = null } catch (e) { /* ignore */ }
+    }
+  })
   googleMarkers.value = []
 
   // Add new markers
   markersList.forEach(markerData => {
-    const marker = new google.maps.Marker({
-      position: { lat: markerData.lat, lng: markerData.lng },
-      map: map.value,
-      title: markerData.name || markerData.title,
-      icon: props.markerIcon || undefined,
-    })
+    let marker = null
+    const position = { lat: markerData.lat, lng: markerData.lng }
+
+    // Prefer AdvancedMarkerElement when available
+    if (window.google && window.google.maps && window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
+      try {
+        marker = new window.google.maps.marker.AdvancedMarkerElement({
+          map: map.value,
+          position,
+          title: markerData.name || markerData.title,
+        })
+      } catch (e) {
+        // fall back to classic Marker on error
+        marker = new window.google.maps.Marker({
+          position,
+          map: map.value,
+          title: markerData.name || markerData.title,
+          icon: props.markerIcon || undefined,
+        })
+      }
+    } else {
+      marker = new window.google.maps.Marker({
+        position,
+        map: map.value,
+        title: markerData.name || markerData.title,
+        icon: props.markerIcon || undefined,
+      })
+    }
 
     // Add click listener
     marker.addListener('click', () => {
@@ -216,20 +248,55 @@ const getCurrentLocation = () => {
           userLocationMarker.value.setMap(null)
         }
         
-        // Add user location marker
-        userLocationMarker.value = new google.maps.Marker({
-          position: pos,
-          map: map.value,
-          title: '您的位置',
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            fillColor: '#4285F4',
-            fillOpacity: 1,
-            scale: 8,
-            strokeColor: 'white',
-            strokeWeight: 2
+        // Add user location marker. Prefer AdvancedMarkerElement for newer API.
+        if (window.google && window.google.maps && window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
+          // create a small styled element for the marker content
+          const el = document.createElement('div')
+          el.style.width = '16px'
+          el.style.height = '16px'
+          el.style.background = '#4285F4'
+          el.style.border = '2px solid white'
+          el.style.borderRadius = '50%'
+          el.style.boxSizing = 'border-box'
+
+          try {
+            userLocationMarker.value = new window.google.maps.marker.AdvancedMarkerElement({
+              map: map.value,
+              position: pos,
+              title: '您的位置',
+              content: el,
+            })
+          } catch (e) {
+            // fallback
+            userLocationMarker.value = new window.google.maps.Marker({
+              position: pos,
+              map: map.value,
+              title: '您的位置',
+              icon: {
+                path: window.google.maps.SymbolPath.CIRCLE,
+                fillColor: '#4285F4',
+                fillOpacity: 1,
+                scale: 8,
+                strokeColor: 'white',
+                strokeWeight: 2
+              }
+            })
           }
-        })
+        } else {
+          userLocationMarker.value = new window.google.maps.Marker({
+            position: pos,
+            map: map.value,
+            title: '您的位置',
+            icon: {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              fillColor: '#4285F4',
+              fillOpacity: 1,
+              scale: 8,
+              strokeColor: 'white',
+              strokeWeight: 2
+            }
+          })
+        }
         
         // Center map on user location
         map.value.setCenter(pos)
@@ -269,13 +336,32 @@ const setZoom = (zoom) => {
 
 const addMarker = (markerData) => {
   if (!map.value) return
-  
-  const marker = new google.maps.Marker({
-    position: { lat: markerData.lat, lng: markerData.lng },
-    map: map.value,
-    title: markerData.name || markerData.title,
-    icon: markerData.icon || props.markerIcon || undefined,
-  })
+  let marker = null
+  const position = { lat: markerData.lat, lng: markerData.lng }
+
+  if (window.google && window.google.maps && window.google.maps.marker && window.google.maps.marker.AdvancedMarkerElement) {
+    try {
+      marker = new window.google.maps.marker.AdvancedMarkerElement({
+        map: map.value,
+        position,
+        title: markerData.name || markerData.title,
+      })
+    } catch (e) {
+      marker = new window.google.maps.Marker({
+        position,
+        map: map.value,
+        title: markerData.name || markerData.title,
+        icon: markerData.icon || props.markerIcon || undefined,
+      })
+    }
+  } else {
+    marker = new window.google.maps.Marker({
+      position,
+      map: map.value,
+      title: markerData.name || markerData.title,
+      icon: markerData.icon || props.markerIcon || undefined,
+    })
+  }
 
   marker.addListener('click', () => {
     selectedMarker.value = markerData
@@ -319,126 +405,3 @@ defineExpose({
   map
 })
 </script>
-
-<style scoped>
-.map-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 400px;
-}
-
-.map {
-  width: 100%;
-  height: 100%;
-  border-radius: 8px;
-}
-
-.map-loading {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: white;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  font-weight: 500;
-  z-index: 10;
-}
-
-.gps-button {
-  position: absolute;
-  right: 10px;
-  top: 10px;
-  background-color: white;
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px;
-  transition: background-color 0.2s;
-  z-index: 5;
-}
-
-.gps-button:hover {
-  background-color: #f5f5f5;
-}
-
-.gps-button:active {
-  background-color: #e0e0e0;
-}
-
-.marker-info-card {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: white;
-  padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: rgba(0, 0, 0, 0.1) 0px -4px 10px;
-  max-width: 90%;
-  width: 400px;
-  z-index: 10;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-}
-
-.info-content {
-  flex: 1;
-}
-
-.info-content h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #333;
-}
-
-.info-content p {
-  margin: 0.3rem 0;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.info-content .distance {
-  color: #667eea;
-  font-weight: 500;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.5rem;
-  color: #999;
-  padding: 0;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.close-btn:hover {
-  color: #333;
-}
-
-@media (max-width: 768px) {
-  .marker-info-card {
-    width: 85%;
-    padding: 1rem;
-  }
-  
-  .info-content h3 {
-    font-size: 1rem;
-  }
-  
-  .info-content p {
-    font-size: 0.85rem;
-  }
-}
-</style>
