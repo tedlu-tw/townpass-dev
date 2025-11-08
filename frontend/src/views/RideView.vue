@@ -3,7 +3,7 @@
         <div class="relative w-full h-full">
             <MapView :zoom="16" :geojson-url="geojson" />
             <div class="absolute inset-0 bg-white bg-opacity-85 z-10 flex flex-col">
-                <WeatherCard class="relative z-20" />
+                <WeatherCard class="relative z-20" :coordinates="weatherCoordinates" />
                 <div class="flex-1 flex flex-col justify-center items-center">
                     <div class="text-[#5AB4C5] font-semibold text-center py-3">
                         <h2 class="text-2xl ">持續時間</h2>
@@ -38,14 +38,64 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import MapView from '../components/MapView.vue'
 import WeatherCard from '../components/WeatherCard.vue'
+import { useGeoLocation } from '../composables/useGeoLocation'
 
 const geojson = ref("/map.geojson")
 const formatted_time = ref("")
 const distance = ref("")
 const speed = ref("")
 const calories = ref("")
+
+// Geolocation and weather data
+const { location: userLocation, startWatching, stopWatching } = useGeoLocation()
+const weatherCoordinates = ref(null)
+let weatherUpdateInterval = null
+let lastWeatherUpdate = 0
+
+// Update weather coordinates from user location (throttled to 20 seconds)
+const updateWeatherCoordinates = () => {
+  const now = Date.now()
+  
+  // Only update if 20 seconds have passed since last update
+  if (userLocation.value && (now - lastWeatherUpdate >= 20000)) {
+    weatherCoordinates.value = {
+      lat: userLocation.value.latitude,
+      lng: userLocation.value.longitude
+    }
+    lastWeatherUpdate = now
+  }
+}
+
+// Watch for location changes and update weather coordinates
+watch(userLocation, (newLocation) => {
+  if (newLocation) {
+    updateWeatherCoordinates()
+  }
+}, { deep: true })
+
+onMounted(() => {
+  // Start watching user location
+  startWatching()
+  
+  // Set interval to check and update weather coordinates every 20 seconds
+  weatherUpdateInterval = setInterval(() => {
+    if (userLocation.value) {
+      weatherCoordinates.value = {
+        lat: userLocation.value.latitude,
+        lng: userLocation.value.longitude
+      }
+    }
+  }, 20000) // 20 seconds
+})
+
+onUnmounted(() => {
+  stopWatching()
+  if (weatherUpdateInterval) {
+    clearInterval(weatherUpdateInterval)
+  }
+})
 
 </script>
