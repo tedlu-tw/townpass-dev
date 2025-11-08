@@ -38,28 +38,128 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import MapView from '../components/MapView.vue'
 import WeatherCard from '../components/WeatherCard.vue'
 import { useGeoLocation } from '../composables/useGeoLocation'
 
 const geojson = ref("/map.geojson")
-const formatted_time = ref("")
-const distance = ref("")
-const speed = ref("")
-const calories = ref("")
+const formatted_time = ref("00:00:00")
+const distance = ref("0.00")
+const speed = ref("0.0")
+const calories = ref("0")
+
+// Ride session
+const rideId = ref(null)
+const userId = ref("user_default") // Should come from auth system
+const startTime = ref(null)
+const isRideActive = ref(false)
 
 // Geolocation and weather data
 const { location: userLocation, startWatching, stopWatching } = useGeoLocation()
 const weatherCoordinates = ref(null)
 let weatherUpdateInterval = null
+let rideUpdateInterval = null
 let lastWeatherUpdate = 0
+
+// API base URL
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
+// Format duration as HH:MM:SS
+const formatDuration = (seconds) => {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+// Start ride session
+const startRide = async () => {
+  if (!userLocation.value) {
+    console.error('Waiting for location...')
+    return
+  }
+  
+  try {
+    const response = await fetch(`${apiUrl}/api/ride/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId.value,
+        start_location: {
+          lat: userLocation.value.latitude,
+          lng: userLocation.value.longitude
+        }
+      })
+    })
+    
+    const data = await response.json()
+    
+    if (response.ok) {
+      rideId.value = data.ride_id
+      startTime.value = data.start_time
+      isRideActive.value = true
+      console.log('Ride started:', data)
+    } else {
+      console.error('Failed to start ride:', data.error)
+    }
+  } catch (error) {
+    console.error('Error starting ride:', error)
+  }
+}
+
+// Send ride update with current location
+const sendRideUpdate = async () => {
+  if (!rideId.value || !userLocation.value) return
+  
+  try {
+    const response = await fetch(`${apiUrl}/api/ride/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ride_id: rideId.value,
+        current_location: {
+          lat: userLocation.value.latitude,
+          lng: userLocation.value.longitude
+        },
+        speed: userLocation.value.speed ? userLocation.value.speed * 3.6 : 0 // m/s to km/h
+      })
+    })
+    
+    if (!response.ok) {
+      console.error('Failed to send ride update')
+    }
+  } catch (error) {
+    console.error('Error sending ride update:', error)
+  }
+}
+
+// Fetch ride status and update display
+const fetchRideStatus = async () => {
+  if (!rideId.value) return
+  
+  try {
+    const response = await fetch(`${apiUrl}/api/ride/status?ride_id=${rideId.value}`)
+    const data = await response.json()
+    
+    if (response.ok) {
+      // Update display values
+      formatted_time.value = formatDuration(data.duration_seconds)
+      distance.value = data.distance_km.toFixed(2)
+      speed.value = data.avg_speed_kmh.toFixed(1)
+      calories.value = Math.round(data.calories)
+    } else {
+      console.error('Failed to fetch ride status:', data.error)
+    }
+  } catch (error) {
+    console.error('Error fetching ride status:', error)
+  }
+}
 
 // Update weather coordinates from user location (throttled to 20 seconds)
 const updateWeatherCoordinates = () => {
   const now = Date.now()
   
-  // Only update if 20 seconds have passed since last update
   if (userLocation.value && (now - lastWeatherUpdate >= 20000)) {
     weatherCoordinates.value = {
       lat: userLocation.value.latitude,
@@ -73,6 +173,11 @@ const updateWeatherCoordinates = () => {
 watch(userLocation, (newLocation) => {
   if (newLocation) {
     updateWeatherCoordinates()
+    
+    // Auto-start ride when location is first available
+    if (!isRideActive.value && !rideId.value) {
+      startRide()
+    }
   }
 }, { deep: true })
 
@@ -80,7 +185,7 @@ onMounted(() => {
   // Start watching user location
   startWatching()
   
-  // Set interval to check and update weather coordinates every 20 seconds
+  // Set interval for weather updates (every 20 seconds)
   weatherUpdateInterval = setInterval(() => {
     if (userLocation.value) {
       weatherCoordinates.value = {
@@ -88,13 +193,26 @@ onMounted(() => {
         lng: userLocation.value.longitude
       }
     }
-  }, 20000) // 20 seconds
+  }, 20000)
+  
+  // Set interval for ride updates (every 2 seconds)
+  rideUpdateInterval = setInterval(() => {
+    if (isRideActive.value && rideId.value) {
+      sendRideUpdate()
+      fetchRideStatus()
+    }
+  }, 2000)
 })
 
 onUnmounted(() => {
   stopWatching()
+  
   if (weatherUpdateInterval) {
     clearInterval(weatherUpdateInterval)
+  }
+  
+  if (rideUpdateInterval) {
+    clearInterval(rideUpdateInterval)
   }
 })
 

@@ -207,6 +207,37 @@ def update_ride():
                 'lng': location.get('lng'),
                 'timestamp': datetime.now().isoformat()
             }
+            
+            # Calculate distance if we have a previous point
+            if len(route) > 0:
+                from math import radians, sin, cos, sqrt, atan2
+                
+                prev_point = route[-1]
+                lat1, lon1 = radians(prev_point['lat']), radians(prev_point['lng'])
+                lat2, lon2 = radians(location['lat']), radians(location['lng'])
+                
+                dlat = lat2 - lat1
+                dlon = lon2 - lon1
+                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                c = 2 * atan2(sqrt(a), sqrt(1-a))
+                segment_distance = 6371000 * c  # meters
+                
+                # Update total distance
+                current_distance = session.get('distance', 0.0)
+                new_distance = current_distance + segment_distance
+                updates['distance'] = new_distance
+                updated_fields['distance_added'] = segment_distance
+                
+                # Calculate calories (rough estimate: 0.0175 * MET * weight * time)
+                # For cycling at moderate pace (~15 km/h), MET ~= 8
+                # Assuming average weight of 70kg
+                # Calories per meter: approximately 0.05 kcal/m for cycling
+                calories_for_segment = segment_distance * 0.05
+                current_calories = session.get('calories', 0.0)
+                new_calories = current_calories + calories_for_segment
+                updates['calories'] = new_calories
+                updated_fields['calories'] = new_calories
+            
             route.append(route_point)
             updates['route'] = route
             updated_fields['route_point_added'] = True
@@ -378,6 +409,109 @@ def get_active_rides():
         
     except Exception as e:
         return jsonify({"error": f"Failed to get active rides: {str(e)}"}), 500
+
+
+@ride_bp.route('/status', methods=['GET'])
+def get_ride_status():
+    """
+    Get current status and metrics of a specific ride session
+    
+    Query parameters:
+    - ride_id: str (required)
+    
+    Response:
+    {
+        "ride_id": str,
+        "status": str,
+        "duration_seconds": int,
+        "distance_km": float,
+        "avg_speed_kmh": float,
+        "max_speed_kmh": float,
+        "calories": float,
+        "current_location": {"lat": float, "lng": float},
+        "route_points": int
+    }
+    """
+    try:
+        ride_id = request.args.get('ride_id')
+        if not ride_id:
+            return jsonify({"error": "ride_id is required"}), 400
+        
+        # Get database
+        db = get_db()
+        if not db.is_connected():
+            return jsonify({"error": "Database not available"}), 503
+        
+        # Get session
+        session = db.get_session(ride_id)
+        if not session:
+            return jsonify({"error": "Ride session not found"}), 404
+        
+        # Calculate current duration
+        start_time = datetime.fromisoformat(session['start_time'])
+        current_time = datetime.now()
+        total_duration = (current_time - start_time).total_seconds()
+        active_duration = total_duration - session.get('paused_time', 0)
+        
+        # Calculate average speed from last 30 seconds of route points
+        route = session.get('route', [])
+        avg_speed = 0.0
+        
+        if len(route) >= 2:
+            # Get points from last 30 seconds
+            current_timestamp = datetime.now()
+            recent_points = []
+            
+            for point in reversed(route):
+                point_time = datetime.fromisoformat(point['timestamp'])
+                time_diff = (current_timestamp - point_time).total_seconds()
+                if time_diff <= 30:
+                    recent_points.insert(0, point)
+                else:
+                    break
+            
+            # Calculate average speed from recent points
+            if len(recent_points) >= 2:
+                from math import radians, sin, cos, sqrt, atan2
+                
+                total_distance = 0.0
+                for i in range(1, len(recent_points)):
+                    prev = recent_points[i-1]
+                    curr = recent_points[i]
+                    
+                    lat1, lon1 = radians(prev['lat']), radians(prev['lng'])
+                    lat2, lon2 = radians(curr['lat']), radians(curr['lng'])
+                    
+                    dlat = lat2 - lat1
+                    dlon = lon2 - lon1
+                    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                    c = 2 * atan2(sqrt(a), sqrt(1-a))
+                    total_distance += 6371000 * c  # meters
+                
+                time_span = (datetime.fromisoformat(recent_points[-1]['timestamp']) - 
+                           datetime.fromisoformat(recent_points[0]['timestamp'])).total_seconds()
+                
+                if time_span > 0:
+                    avg_speed = (total_distance / 1000) / (time_span / 3600)  # km/h
+        
+        # Get current location
+        current_location = session.get('current_location', session.get('start_location'))
+        
+        # Return status
+        return jsonify({
+            "ride_id": ride_id,
+            "status": session.get('status', 'active'),
+            "duration_seconds": int(active_duration),
+            "distance_km": session.get('distance', 0.0) / 1000,
+            "avg_speed_kmh": round(avg_speed, 1),
+            "max_speed_kmh": round(session.get('max_speed', 0.0), 1),
+            "calories": round(session.get('calories', 0.0), 1),
+            "current_location": current_location,
+            "route_points": len(route)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to get ride status: {str(e)}"}), 500
 
 
 @ride_bp.route('/pause', methods=['POST'])
