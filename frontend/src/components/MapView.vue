@@ -76,7 +76,7 @@ const props = defineProps({
   },
   mapTypeId: {
     type: String,
-    default: 'terrain'
+    default: 'roadmap'
   },
   showGpsButton: {
     type: Boolean,
