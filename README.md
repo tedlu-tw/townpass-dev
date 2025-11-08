@@ -1,29 +1,68 @@
-# TownPass Development Scripts
+# TownPass
+
+A bike-sharing web application with real-time tracking, route visualization, and statistics.
+
+## Project Structure
+
+```
+townpass-dev/
+├── frontend/          # Vue.js web application
+│   └── src/
+│       ├── components/   # UI components
+│       ├── views/        # Page views
+│       ├── composables/  # Business logic
+│       └── router/       # Route configuration
+└── backend/           # Python data fetching scripts
+    └── data/          # JSON data files
+```
+
+## Quick Start
+
+### Frontend (Vue.js)
+
+1. **Install dependencies:**
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+2. **Start development server:**
+   ```bash
+   npm run dev
+   ```
+   
+3. **Open in browser:**
+   - URL: http://localhost:5173 (or 5174 if port is in use)
+   - Routes: `/home`, `/ride`, `/history`
+
+### Backend (Python Scripts)
 
 Python scripts for fetching data from various Taiwan public APIs.
 
-## Setup
-
 1. **Install Python dependencies:**
    ```bash
-   pip install -r requirements.txt
+   pip install -r backend/requirements.txt
    ```
 
 2. **Configure environment variables:**
-   - Copy `.env.example` to `.env`:
-     ```bash
-     cp .env.example .env
-     ```
-   - Edit `.env` and add your API keys:
+   - Copy `backend/.env.example` to `backend/.env`
+   - Add your API keys:
      ```
      CWA_API_KEY=your_actual_api_key_here
      MOENV_API_KEY=your_actual_api_key_here
      ```
 
-3. **Fix SSL Certificate Issues (macOS only, if needed):**
-   
-   If you encounter SSL certificate errors, run:
+3. **Run scripts:**
    ```bash
+   cd backend
+   python fetch_youbike_data.py
+   python fetch_weather_data.py
+   python fetch_aqi_data.py
+   ```
+
+4. **Fix SSL Certificate Issues (macOS only, if needed):**
+   ```bash
+   cd backend
    ./fix_ssl_certificates.sh
    ```
    
