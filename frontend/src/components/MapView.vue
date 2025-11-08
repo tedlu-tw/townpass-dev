@@ -92,7 +92,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['marker-click', 'map-ready', 'location-found'])
+const emit = defineEmits(['marker-click', 'map-ready', 'location-found', 'center-changed'])
 
 // ============================================================================
 // State
@@ -105,6 +105,7 @@ const googleMarkers = ref([])
 const selectedMarker = ref(null)
 const userLocationMarker = ref(null)
 const currentLocation = ref(null)
+const mapCenter = ref(null)
 
 // ============================================================================
 // Constants
@@ -160,6 +161,30 @@ const initMap = async () => {
 
     loading.value = false
     emit('map-ready', map.value)
+    
+    // Listen for center changes
+    map.value.addListener('center_changed', () => {
+      const center = map.value.getCenter()
+      if (center) {
+        const centerCoords = {
+          lat: center.lat(),
+          lng: center.lng()
+        }
+        mapCenter.value = centerCoords
+        emit('center-changed', centerCoords)
+      }
+    })
+    
+    // Emit initial center
+    const initialCenter = map.value.getCenter()
+    if (initialCenter) {
+      const centerCoords = {
+        lat: initialCenter.lat(),
+        lng: initialCenter.lng()
+      }
+      mapCenter.value = centerCoords
+      emit('center-changed', centerCoords)
+    }
     
     if (props.geojsonUrl) {
       await loadGeoJsonMarkers()

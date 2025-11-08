@@ -11,9 +11,13 @@
 				<div class="text-6xl font-extrabold leading-none ">{{ time }}</div>
 
 				<div class="w-full flex flex-col justify-between">
-					<div class="text-xl font-semibold">{{ weather?.location || '台北市大安區' }}</div>
+					<div class="text-xl font-semibold">
+						{{ weatherData?.weather?.location_name || weather?.location || '載入中...' }}
+					</div>
 					<div class="flex justify-between items-center w-full">
-						<div class="text-xl font-bold text-left">{{ weather?.temperature ?? '12' }}°C</div>
+						<div class="text-xl font-bold text-left">
+							{{ weatherData?.weather?.temperature || weather?.temperature || '--°C' }}
+						</div>
 						<div class="flex items-center text-xl font-bold text-right">
 							<!-- Rain SVG icon -->
 							<svg width="32" height="24" viewBox="0 0 32 24" fill="none"
@@ -41,7 +45,7 @@
 									</filter>
 								</defs>
 							</svg>
-							<span>{{ weather?.humidity ?? '12' }}%</span>
+							<span>{{ weatherData?.weather?.rain_probability_3h || weather?.humidity || '--' }}</span>
 						</div>
 					</div>
 				</div>
@@ -49,8 +53,20 @@
 		</div>
 	<div class="relative z-20 bg-[#5AB4C5] rounded-b-[8px] text-white/90 text-m px-2">
 		<div class="inline-block whitespace-nowrap animate-marquee">
-			<!-- render messages from prop and duplicate them for continuous scroll -->
-			<template v-for="(msg, idx) in props.marqueeMessages" :key="`a-${idx}`">
+			<!-- render messages from prop or AQI data -->
+			<template v-if="weatherData?.aqi">
+				<span class="pr-[5rem]">
+					{{ weatherData.weather?.weather_condition || '天氣' }} | 
+					降雨機率: {{ weatherData.weather?.rain_probability_3h || '--' }} | 
+					空氣品質: {{ weatherData.aqi?.aqi_level || '--' }} (AQI: {{ weatherData.aqi?.aqi || '--' }})
+				</span>
+				<span class="pr-[5rem]">
+					{{ weatherData.weather?.weather_condition || '天氣' }} | 
+					降雨機率: {{ weatherData.weather?.rain_probability_3h || '--' }} | 
+					空氣品質: {{ weatherData.aqi?.aqi_level || '--' }} (AQI: {{ weatherData.aqi?.aqi || '--' }})
+				</span>
+			</template>
+			<template v-else v-for="(msg, idx) in props.marqueeMessages" :key="`a-${idx}`">
 				<span class="pr-[5rem]">{{ msg }}</span>
 			</template>
 		</div>
@@ -59,9 +75,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const props = defineProps({
+	coordinates: { type: Object, default: null }, // { lat, lng }
 	weather: { type: Object, default: null },
 	loading: { type: Boolean, default: false },
 	error: { type: String, default: null },
@@ -74,7 +91,11 @@ const props = defineProps({
 })
 
 const time = ref(formatTime(new Date()))
+const weatherData = ref(null)
+const isLoading = ref(false)
+const fetchError = ref(null)
 let timer = null
+let fetchTimer = null
 
 function formatTime(d) {
 	try {
@@ -88,11 +109,47 @@ function formatTime(d) {
 	}
 }
 
+async function fetchWeatherData(lat, lng) {
+	if (!lat || !lng) return
+	
+	isLoading.value = true
+	fetchError.value = null
+	
+	try {
+		const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+		const response = await fetch(`${apiUrl}/api/weather?lat=${lat}&lng=${lng}&include_aqi=true`)
+		
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`)
+		}
+		
+		const data = await response.json()
+		weatherData.value = data
+	} catch (error) {
+		console.error('Error fetching weather data:', error)
+		fetchError.value = error.message
+	} finally {
+		isLoading.value = false
+	}
+}
+
+// Watch for coordinate changes and fetch weather data
+watch(() => props.coordinates, (newCoords) => {
+	if (newCoords && newCoords.lat && newCoords.lng) {
+		// Debounce the fetch to avoid too many requests while dragging
+		if (fetchTimer) clearTimeout(fetchTimer)
+		fetchTimer = setTimeout(() => {
+			fetchWeatherData(newCoords.lat, newCoords.lng)
+		}, 500)
+	}
+}, { immediate: true })
+
 onMounted(() => {
 	timer = setInterval(() => { time.value = formatTime(new Date()) }, 30_000)
 })
 
 onUnmounted(() => {
 	if (timer) clearInterval(timer)
+	if (fetchTimer) clearTimeout(fetchTimer)
 })
 </script>
