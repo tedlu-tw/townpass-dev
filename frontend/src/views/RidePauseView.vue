@@ -10,7 +10,7 @@
         <h2 class="text-2xl ">持續時間 <span class="text-4xl">{{ formatted_time }}</span> </h2>
       </div>
       <div class="text-[#5AB4C5] font-semibold text-center py-3">
-        <h2 class="text-2xl text-[#5AB4C5] font-semibold">騎行距離 <span class="text-2xl">{{ distance }}</span> KM</h2>
+        <h2 class="text-2xl text-[#5AB4C5] font-semibold">騎行距離 <span class="text-4xl">{{ distance }}</span> KM</h2>
       </div>
     </div>
   </div>
