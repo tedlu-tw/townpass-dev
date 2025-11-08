@@ -70,17 +70,30 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import MapView from '../components/MapView.vue'
 
 const router = useRouter()
 const geojson = ref("/map.geojson")
-const calories = ref("123")
-const distance = ref("123")
-const formatted_time = ref("123")
+const calories = ref("0")
+const distance = ref("0.00")
+const formatted_time = ref("00:00:00")
 
 const goHome = () => {
   router.push('/home')
 }
+
+onMounted(() => {
+  // Load ride data from sessionStorage
+  const savedDistance = sessionStorage.getItem('currentRideDistance')
+  const savedCalories = sessionStorage.getItem('currentRideCalories')
+  const savedTime = sessionStorage.getItem('currentRideFormattedTime')
+  
+  if (savedDistance) distance.value = savedDistance
+  if (savedCalories) calories.value = savedCalories
+  if (savedTime) formatted_time.value = savedTime
+  
+  console.log('RideFinishView: Loaded ride data', { distance: distance.value, calories: calories.value, time: formatted_time.value })
+})
 </script>
