@@ -4,6 +4,8 @@ import RideView from '../views/RideView.vue'
 import RidePauseView from '../views/RidePauseView.vue'
 import RideFinishView from '../views/RideFinishView.vue'
 import HistoryView from '../views/HistoryView.vue'
+import MapDemoView from '../views/MapDemoView.vue'
+import StationsMapView from '../views/StationsMapView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -36,6 +38,16 @@ const router = createRouter({
       path: '/history',
       name: 'history',
       component: HistoryView
+    },
+    {
+      path: '/map-demo',
+      name: 'map-demo',
+      component: MapDemoView
+    },
+    {
+      path: '/stations',
+      name: 'stations',
+      component: StationsMapView
     }
   ]
 })

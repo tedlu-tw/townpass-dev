@@ -6,8 +6,10 @@
       </div>
       <div class="navbar-links">
         <router-link to="/home" class="nav-link">首頁</router-link>
+        <router-link to="/stations" class="nav-link">站點地圖</router-link>
         <router-link to="/ride" class="nav-link">開始騎乘</router-link>
         <router-link to="/history" class="nav-link">騎乘紀錄</router-link>
+        <router-link to="/map-demo" class="nav-link">地圖示範</router-link>
       </div>
     </div>
   </nav>
