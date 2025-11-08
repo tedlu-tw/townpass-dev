@@ -41,6 +41,8 @@ venv.bak/
 # Data files
 data/
 *.json
+!youbike_data_mock.json
+!weather_data_mock.json
 
 # Logs
 *.log
