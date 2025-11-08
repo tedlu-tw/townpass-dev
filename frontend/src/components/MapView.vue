@@ -10,7 +10,7 @@
     <button
       v-if="!loading && showGpsButton"
       @click="getCurrentLocation"
-      class="absolute top-5 right-2.5 bg-white w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors z-20 hover:bg-gray-100 active:bg-gray-200"
+      class="absolute top-[15vh] right-5 bg-white w-10 h-10 rounded-full flex items-center justify-center shadow-md transition-colors z-20 hover:bg-gray-100 active:bg-gray-200"
       aria-label="取得目前位置"
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-700">
