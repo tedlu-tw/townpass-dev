@@ -2,8 +2,9 @@
   
   <div id="app" class="min-h-screen flex flex-col">
     <nav class="bg-[#5AB4C5] h-[10vh] relative z-20"></nav>
-    <router-view class="h-[80vh] relative"/>
+    <router-view :class="showFooter ? 'h-[80vh]' : 'h-[90vh]'" class="relative"/>
     <Footer 
+      v-if="showFooter"
       class="h-[10vh] relative z-20" 
       :button-text="footerButtonText" 
       :show-double-buttons="showDoubleButtons"
@@ -15,44 +16,68 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Footer from './components/Footer.vue'
 
 const route = useRoute()
 const router = useRouter()
-const footerButtonText = ref('開始騎行')
-const showDoubleButtons = ref(false)
 
-watch(() => route.path, (newPath) => {
-  if (newPath === '/ride') {
-    footerButtonText.value = '暫停騎行'
-    showDoubleButtons.value = false
-  } else if (newPath === '/ride/pause') {
-    showDoubleButtons.value = true
-  } else {
-    footerButtonText.value = '開始騎行'
-    showDoubleButtons.value = false
+// Footer 配置映射表
+const footerConfig = {
+  '/home': {
+    show: true,
+    buttonText: '開始騎行',
+    doubleButtons: false
+  },
+  '/': {
+    show: true,
+    buttonText: '開始騎行',
+    doubleButtons: false
+  },
+  '/ride': {
+    show: true,
+    buttonText: '暫停騎行',
+    doubleButtons: false
+  },
+  '/ride/pause': {
+    show: true,
+    buttonText: '',
+    doubleButtons: true
+  },
+  '/ride/finish': {
+    show: false,
+    buttonText: '',
+    doubleButtons: false
   }
+}
+
+// 當前 Footer 配置
+const currentConfig = ref(footerConfig['/home'])
+
+// 使用 computed 來獲取配置值
+const showFooter = computed(() => currentConfig.value.show)
+const footerButtonText = computed(() => currentConfig.value.buttonText)
+const showDoubleButtons = computed(() => currentConfig.value.doubleButtons)
+
+// 監聽路由變化更新配置
+watch(() => route.path, (newPath) => {
+  currentConfig.value = footerConfig[newPath] || footerConfig['/home']
 }, { immediate: true })
 
 const handleFooterClick = () => {
   if (route.path === '/' || route.path === '/home') {
-    // HomeView: 開始騎行 -> 切換到 RideView
     router.push('/ride')
   } else if (route.path === '/ride') {
-    // RideView: 暫停騎行 -> 切換到 RidePauseView
     router.push('/ride/pause')
   }
 }
 
 const handleContinue = () => {
-  // 繼續騎行 -> 返回 RideView
   router.push('/ride')
 }
 
 const handleFinish = () => {
-  // 結束騎行 -> 切換到 RideFinishView
   router.push('/ride/finish')
 }
 </script>

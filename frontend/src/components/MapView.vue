@@ -3,7 +3,7 @@
     <div ref="mapDiv" class="w-full h-full"></div>
 
     <!-- Center crosshair to indicate map center coordinate -->
-    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+    <div v-if="props.crosshair" class="absolute inset-0 flex items-center justify-center pointer-events-none">
       <div class="relative w-6 h-6">
         <!-- vertical line -->
         <div class="absolute left-1/2 top-0 transform -translate-x-1/2 h-6 w-[3px] bg-[#5AB4C5]"></div>
@@ -85,6 +85,10 @@ const props = defineProps({
   markerIcon: {
     type: Object,
     default: null
+  },
+  crosshair: {
+    type: Boolean,
+    default: true
   }
 })
 
