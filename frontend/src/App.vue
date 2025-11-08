@@ -1,14 +1,14 @@
 <template>
-  <div id="app">
+  <div id="app" class="min-h-screen flex flex-col">
     <Navbar />
 
-    <main class="app-main">
-      <div class="container">
+    <main class="flex-1">
+      <div class="w-full max-w-[1200px] mx-auto px-4 md:px-5">
         <router-view />
       </div>
     </main>
 
-    <Footer />
+    <Footer class="py-[10%]"/>
   </div>
 </template>
 
@@ -17,32 +17,4 @@ import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
 </script>
 
-<style scoped>
-#app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.app-main {
-  flex: 1;
-  padding: 80px 0 40px;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-  width: 100%;
-}
-
-@media (max-width: 768px) {
-  .app-main {
-    padding: 70px 0 30px;
-  }
-  
-  .container {
-    padding: 0 15px;
-  }
-}
-</style>
+<!-- Styles moved to global Tailwind setup (use `src/assets/main.css` with Tailwind directives) -->
