@@ -14,6 +14,95 @@ station_bp = Blueprint('station', __name__)
 youbike_fetcher = YouBikeFetcher()
 
 
+def determine_station_color(station):
+    """
+    Determine station marker color based on availability
+    
+    Args:
+        station: Station data dict
+    
+    Returns:
+        Color string: 'green', 'yellow', or 'red'
+    """
+    available_rent = station.get('available_rent_bikes', 0)
+    available_return = station.get('available_return_bikes', 0)
+    
+    # Red: No docks available
+    if available_return == 0:
+        return 'red'
+    # Yellow: No bikes available
+    elif available_rent == 0:
+        return 'yellow'
+    # Green: Both available
+    else:
+        return 'green'
+
+
+def station_to_geojson_feature(station, include_distance=False):
+    """
+    Convert station data to GeoJSON Feature format
+    
+    Args:
+        station: Station data dict
+        include_distance: Whether to include distance in properties
+    
+    Returns:
+        GeoJSON Feature dict
+    """
+    # Remove "YouBike2.0_" prefix from station name
+    station_name = station.get('sna', '')
+    if station_name.startswith('YouBike2.0_'):
+        station_name = station_name.replace('YouBike2.0_', '', 1)
+    
+    feature = {
+        "type": "Feature",
+        "geometry": {
+            "type": "Point",
+            "coordinates": [
+                float(station.get('longitude', 0)),
+                float(station.get('latitude', 0))
+            ]
+        },
+        "properties": {
+            "id": station.get('sno'),
+            "name": station_name,
+            "site": station.get('ar', ''),
+            "icon": determine_station_color(station),
+            "available_bikes": station.get('available_rent_bikes', 0),
+            "available_docks": station.get('available_return_bikes', 0),
+            "area": station.get('sarea', ''),
+            "update_time": station.get('updateTime', ''),
+            "active": station.get('act') == '1'
+        }
+    }
+    
+    # Add distance if provided
+    if include_distance and 'distance' in station:
+        feature['properties']['distance'] = station['distance']
+    
+    return feature
+
+
+def stations_to_geojson(stations, include_distance=False):
+    """
+    Convert list of stations to GeoJSON FeatureCollection
+    
+    Args:
+        stations: List of station data dicts
+        include_distance: Whether to include distance in properties
+    
+    Returns:
+        GeoJSON FeatureCollection dict
+    """
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            station_to_geojson_feature(station, include_distance)
+            for station in stations
+        ]
+    }
+
+
 def calculate_distance(lat1, lon1, lat2, lon2):
     """
     Calculate distance between two coordinates using Haversine formula
@@ -130,16 +219,21 @@ def get_nearby_stations():
         # Apply limit
         nearby_stations = nearby_stations[:limit]
         
-        return jsonify({
+        # Convert to GeoJSON
+        geojson = stations_to_geojson(nearby_stations, include_distance=True)
+        
+        # Add metadata
+        geojson['metadata'] = {
             "count": len(nearby_stations),
-            "stations": nearby_stations,
             "query": {
                 "lat": lat,
                 "lng": lng,
                 "radius": radius,
                 "type": station_type
             }
-        }), 200
+        }
+        
+        return jsonify(geojson), 200
         
     except Exception as e:
         return jsonify({"error": f"Failed to get nearby stations: {str(e)}"}), 500
@@ -175,9 +269,10 @@ def get_station_info(station_id):
                 "station_id": station_id
             }), 404
         
-        return jsonify({
-            "station": station
-        }), 200
+        # Convert to GeoJSON Feature
+        geojson_feature = station_to_geojson_feature(station)
+        
+        return jsonify(geojson_feature), 200
         
     except Exception as e:
         return jsonify({"error": f"Failed to get station info: {str(e)}"}), 500
@@ -209,11 +304,16 @@ def get_stations_by_area(area_name):
         # Get stations by area
         stations = youbike_fetcher.get_stations_by_area(area_name)
         
-        return jsonify({
+        # Convert to GeoJSON
+        geojson = stations_to_geojson(stations)
+        
+        # Add metadata
+        geojson['metadata'] = {
             "count": len(stations),
-            "area": area_name,
-            "stations": stations
-        }), 200
+            "area": area_name
+        }
+        
+        return jsonify(geojson), 200
         
     except Exception as e:
         return jsonify({"error": f"Failed to get stations by area: {str(e)}"}), 500
@@ -252,11 +352,16 @@ def get_available_stations():
         if limit and limit > 0:
             stations = stations[:limit]
         
-        return jsonify({
+        # Convert to GeoJSON
+        geojson = stations_to_geojson(stations)
+        
+        # Add metadata
+        geojson['metadata'] = {
             "count": len(stations),
-            "min_bikes": min_bikes,
-            "stations": stations
-        }), 200
+            "min_bikes": min_bikes
+        }
+        
+        return jsonify(geojson), 200
         
     except Exception as e:
         return jsonify({"error": f"Failed to get available stations: {str(e)}"}), 500
