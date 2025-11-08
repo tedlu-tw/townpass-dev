@@ -1,0 +1,44 @@
+services:
+  # Backend API Server (Development)
+  backend-dev:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: townpass-backend-dev
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    networks:
+      - townpass-network
+    command: python app.py
+    restart: unless-stopped
+
+  # Frontend Web Application (Development)
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: townpass-frontend-dev
+    ports:
+      - "5173:5173"  # Vite default port
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - townpass-network
+    environment:
+      - VITE_API_URL=http://localhost:5000
+    command: npm run dev -- --host
+    restart: unless-stopped
+
+networks:
+  townpass-network:
+    driver: bridge

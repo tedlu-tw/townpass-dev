@@ -35,6 +35,25 @@ townpass-dev/
    - URL: http://localhost:5173 (or 5174 if port is in use)
    - Routes: `/home`, `/ride`, `/history`
 
+### Docker (Production & Development)
+
+🐳 **Quick Start with Docker:**
+
+```bash
+# Production (recommended for deployment)
+docker-compose up -d
+
+# Development (with hot reload)
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+📖 **Full Docker Documentation**: See [DOCKER.md](./DOCKER.md) for:
+- Complete setup instructions
+- Troubleshooting guide
+- Build optimization
+- Cloud deployment
+- Performance tuning
+
 ### Backend (Python Scripts)
 
 Python scripts for fetching data from various Taiwan public APIs.
