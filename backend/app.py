@@ -55,6 +55,7 @@ def index():
             "ride_session": {
                 "POST /api/ride/start": "Start a new ride session",
                 "POST /api/ride/update": "Update ride metrics",
+                "GET /api/ride/status": "Get real-time ride status and metrics",
                 "POST /api/ride/finish": "Finish a ride session",
                 "POST /api/ride/pause": "Pause a ride session",
                 "POST /api/ride/resume": "Resume a ride session",

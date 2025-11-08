@@ -15,7 +15,7 @@ services:
     networks:
       - townpass-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -27,9 +27,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=
     container_name: townpass-frontend
     ports:
       - "80:80"
+    environment:
+      - API_URL=
     depends_on:
       - backend
     networks:

@@ -16,6 +16,11 @@ RUN rm -f package-lock.json && npm install
 # Copy all source files
 COPY . .
 
+# Accept build argument for API URL
+# Empty means use relative URLs (same origin) - works with nginx proxy
+ARG VITE_API_URL=
+ENV VITE_API_URL=$VITE_API_URL
+
 # Build the application
 RUN npm run build
 
