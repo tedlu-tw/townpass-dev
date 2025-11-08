@@ -19,24 +19,22 @@ load_dotenv()
 class WeatherFetcher:
     """Fetches and processes weather forecast data from CWA"""
     
-    BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001"
+    BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-061"
+    API_KEY = "CWA-E55648B2-9676-4603-A8A4-6662D8D488BB"
     
     def __init__(self, locations: List[str] = None, elements: List[str] = None, api_key: str = None):
         """
         Initialize weather fetcher
         
         Args:
-            locations: List of location names (default: 臺北市, 新北市, 基隆市)
-            elements: List of weather elements (default: Wx, PoP, CI, MinT, MaxT)
-            api_key: CWA API key (default: from CWA_API_KEY environment variable)
+            locations: List of location names (district names like 松山區, 信義區)
+            elements: List of weather elements (default: 天氣預報綜合描述, 3小時降雨機率, 溫度, 天氣現象)
+            api_key: CWA API key (default: built-in key)
         """
-        self.locations = locations or ["臺北市", "新北市", "基隆市"]
-        self.elements = elements or ["Wx", "PoP", "CI", "MinT", "MaxT"]
-        self.api_key = api_key or os.getenv("CWA_API_KEY")
+        self.locations = locations
+        self.elements = elements or ["天氣預報綜合描述", "3小時降雨機率", "溫度", "天氣現象"]
+        self.api_key = api_key or self.API_KEY
         self.data: Optional[Dict] = None
-        
-        if not self.api_key:
-            raise ValueError("CWA_API_KEY not found. Please set it in .env file or pass it as a parameter.")
     
     def fetch_data(self, timeout: int = 10, verify_ssl: bool = True) -> bool:
         """
@@ -50,16 +48,19 @@ class WeatherFetcher:
             True if successful, False otherwise
         """
         try:
-            # Build query parameters
+            # Build query parameters - ElementName is URL encoded in the API
             params = {
                 "Authorization": self.api_key,
                 "format": "JSON",
-                "locationName": ",".join(self.locations),
-                "elementName": ",".join(self.elements)
+                "ElementName": ",".join(self.elements)
             }
             
+            if self.locations:
+                params["LocationName"] = ",".join(self.locations)
+            
             print(f"Fetching weather data from CWA API...")
-            print(f"Locations: {', '.join(self.locations)}")
+            if self.locations:
+                print(f"Locations: {', '.join(self.locations)}")
             print(f"Elements: {', '.join(self.elements)}")
             
             # Add headers for better compatibility
@@ -80,8 +81,9 @@ class WeatherFetcher:
             
             # Check if request was successful
             if self.data.get("success") == "true":
-                locations_count = len(self.data.get("records", {}).get("location", []))
-                print(f"✓ Successfully fetched weather data for {locations_count} locations")
+                locations_data = self.data.get("records", {}).get("Locations", [])
+                total_count = sum(len(loc.get("Location", [])) for loc in locations_data)
+                print(f"✓ Successfully fetched weather data for {total_count} locations")
                 return True
             else:
                 print(f"✗ API returned success=false")
@@ -93,7 +95,6 @@ class WeatherFetcher:
         except requests.exceptions.SSLError as e:
             print(f"✗ SSL Error: {e}")
             print("💡 Tip: Try running with verify_ssl=False or update your SSL certificates")
-            print("   On macOS, you may need to run: /Applications/Python*/Install\\ Certificates.command")
             return False
         except requests.exceptions.RequestException as e:
             print(f"✗ Error fetching data: {e}")
@@ -103,15 +104,54 @@ class WeatherFetcher:
             return False
     
     def get_location_weather(self, location_name: str) -> Optional[Dict]:
-        """Get weather data for a specific location"""
+        """Get weather data for a specific location (district name)"""
         if not self.data:
             return None
         
-        locations = self.data.get("records", {}).get("location", [])
-        for location in locations:
-            if location.get("locationName") == location_name:
-                return location
+        locations_data = self.data.get("records", {}).get("Locations", [])
+        for locations_group in locations_data:
+            for location in locations_group.get("Location", []):
+                if location.get("LocationName") == location_name:
+                    return location
         return None
+    
+    def find_nearest_location(self, lat: float, lng: float) -> Optional[Dict]:
+        """Find nearest location by coordinates using Haversine distance"""
+        if not self.data:
+            return None
+        
+        import math
+        
+        def haversine_distance(lat1, lon1, lat2, lon2):
+            lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+            a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+            c = 2 * math.asin(math.sqrt(a))
+            return 6371000 * c  # meters
+        
+        nearest_location = None
+        min_distance = float('inf')
+        
+        locations_data = self.data.get("records", {}).get("Locations", [])
+        for locations_group in locations_data:
+            for location in locations_group.get("Location", []):
+                try:
+                    loc_lat = float(location.get("Latitude", 0))
+                    loc_lng = float(location.get("Longitude", 0))
+                    
+                    if loc_lat == 0 or loc_lng == 0:
+                        continue
+                    
+                    distance = haversine_distance(lat, lng, loc_lat, loc_lng)
+                    
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_location = location
+                except (ValueError, TypeError):
+                    continue
+        
+        return nearest_location
     
     def display_weather_summary(self):
         """Display weather summary for all locations"""
