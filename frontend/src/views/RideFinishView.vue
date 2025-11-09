@@ -2,7 +2,7 @@
     <div class="w-full flex flex-col items-center">
         <MapView :zoom="16" :geojson-url="geojson" />
         <div class="absolute inset-0 bg-white bg-opacity-85 z-10 flex flex-col justify-center items-center">
-            <div class="bg-[#5AB4C5] w-[90%] h-[95%] rounded-[8px] relative">
+            <div class="bg-[#5AB4C5] w-[90%] h-[80%] rounded-[8px] relative">
                 <!-- 關閉按鈕 -->
                 <button @click="goHome" class="absolute top-3 right-3 text-white hover:text-gray-200 text-3xl font-bold z-20">
                     ×
@@ -13,10 +13,10 @@
                     </h3>
                     
                     <!-- 大卡片 -->
-                    <div class="w-[90%] mt-3 mb-3" style="height: 55%;">
+                    <div class="w-[90%] mt-3 mb-3" style="height: 100%;">
                         <div class="bg-white rounded-[8px] overflow-hidden h-full flex flex-col">
                             <!-- 地圖區域 -->
-                            <div class="h-[50%] min-h-[120px]">
+                            <div class="h-full min-h-[120px]">
                                 <MapView 
                                     :crosshair="false" 
                                     :show-gps-button="false" 
