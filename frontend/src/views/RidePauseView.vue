@@ -88,7 +88,8 @@ const fetchRideStatus = async () => {
 
 // Map center changed handler (from user dragging map)
 function onCenterChanged(center) {
-  mapCenter.value = center
+  // Don't update mapCenter here to avoid infinite loop!
+  // Just trigger station fetch with debounce
   handleCenterChanged(center)
 }
 
