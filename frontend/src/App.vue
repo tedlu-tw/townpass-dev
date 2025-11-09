@@ -1,8 +1,8 @@
 <template>
 
   <div id="app" class="min-h-screen flex flex-col">
-    <nav class="bg-[#5AB4C5] h-[10vh] relative z-20"></nav>
-    <router-view :class="showFooter ? 'h-[80vh]' : 'h-[90vh]'" class="relative" />
+    <!-- <nav class="bg-[#5AB4C5] h-[10vh] relative z-20"></nav> -->
+    <router-view :class="showFooter ? 'h-[90vh]' : 'h-[100vh]'" class="relative" />
 
     <!-- 歷史記錄按鈕 - 只在顯示「開始騎行」時顯示 -->
     <button v-if="footerButtonText === '開始騎行'" @click="goToHistory"
