@@ -53,6 +53,7 @@ const rideId = ref(null)
 const userId = ref("user_default") // Should come from auth system
 const startTime = ref(null)
 const isRideActive = ref(false)
+const isStartingRide = ref(false) // Flag to prevent multiple simultaneous starts
 
 // Map center - will be updated with user location
 const mapCenter = ref(null)
@@ -66,7 +67,7 @@ let durationUpdateInterval = null
 let lastWeatherUpdate = 0
 
 // API base URL
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000' : '')
 
 // Format duration as HH:MM:SS
 const formatDuration = (seconds) => {
@@ -79,13 +80,27 @@ const formatDuration = (seconds) => {
 // Update duration display from startTime
 const updateDuration = () => {
   if (startTime.value && isRideActive.value) {
-    const start = new Date(startTime.value)
+    // Parse startTime as UTC by appending 'Z' if not present
+    const startTimeStr = startTime.value.endsWith('Z') ? startTime.value : startTime.value + 'Z'
+    const start = new Date(startTimeStr)
     const now = new Date()
+    
+    // Debug: Log times if duration seems wrong
     const totalElapsed = Math.floor((now - start) / 1000)
+    if (totalElapsed > 28800) { // More than 8 hours
+      console.error('⚠️ Duration calculation issue:', {
+        startTime: startTime.value,
+        startDate: start.toString(),
+        now: now.toString(),
+        elapsed: totalElapsed
+      })
+    }
+    
+    const realElapsed = totalElapsed
     
     // Subtract total paused time
     const totalPausedSeconds = parseInt(sessionStorage.getItem('totalPausedSeconds') || '0')
-    const activeDuration = totalElapsed - totalPausedSeconds
+    const activeDuration = realElapsed - totalPausedSeconds
     
     formatted_time.value = formatDuration(Math.max(0, activeDuration))
     
@@ -100,6 +115,14 @@ const startRide = async () => {
     console.error('Waiting for location...')
     return
   }
+  
+  // Prevent multiple simultaneous starts
+  if (isStartingRide.value || isRideActive.value || rideId.value) {
+    console.log('Ride already starting or active, skipping start request')
+    return
+  }
+  
+  isStartingRide.value = true
   
   try {
     const response = await fetch(`${apiUrl}/api/ride/start`, {
@@ -118,12 +141,14 @@ const startRide = async () => {
     
     if (response.ok) {
       rideId.value = data.ride_id
-      startTime.value = data.start_time
+      // Normalize startTime: ensure it has 'Z' suffix for UTC
+      const normalizedStartTime = data.start_time.endsWith('Z') ? data.start_time : data.start_time + 'Z'
+      startTime.value = normalizedStartTime
       isRideActive.value = true
       
       // Store ride info in sessionStorage for other views to access
       sessionStorage.setItem('currentRideId', data.ride_id)
-      sessionStorage.setItem('currentRideStartTime', data.start_time)
+      sessionStorage.setItem('currentRideStartTime', normalizedStartTime)
       
       // Initialize total paused time (reset on new ride)
       sessionStorage.setItem('totalPausedSeconds', '0')
@@ -141,6 +166,8 @@ const startRide = async () => {
     }
   } catch (error) {
     console.error('Error starting ride:', error)
+  } finally {
+    isStartingRide.value = false
   }
 }
 
@@ -202,10 +229,8 @@ watch(userLocation, (newLocation) => {
     
     updateWeatherCoordinates()
     
-    // Auto-start ride when location is first available
-    if (!isRideActive.value && !rideId.value) {
-      startRide()
-    }
+    // Note: Do NOT auto-start here - location updates frequently!
+    // Auto-start is handled once in onMounted() after first location fix
   }
 }, { deep: true })
 
@@ -218,45 +243,65 @@ onMounted(() => {
   const existingStartTime = sessionStorage.getItem('currentRideStartTime')
   
   if (existingRideId && existingStartTime) {
-    // Restore ride session
-    rideId.value = existingRideId
-    startTime.value = existingStartTime
-    isRideActive.value = true
+    // Check if session is too old (more than 24 hours)
+    const start = new Date(existingStartTime)
+    const now = new Date()
+    const hoursSinceStart = (now - start) / 1000 / 3600
     
-    // Restore display values from sessionStorage
-    const savedDistance = sessionStorage.getItem('currentRideDistance')
-    const savedCalories = sessionStorage.getItem('currentRideCalories')
-    const savedSpeed = sessionStorage.getItem('currentRideSpeed')
-    const savedTime = sessionStorage.getItem('currentRideFormattedTime')
-    
-    if (savedDistance) distance.value = savedDistance
-    if (savedCalories) calories.value = savedCalories
-    if (savedSpeed) speed.value = savedSpeed
-    if (savedTime) formatted_time.value = savedTime
-    
-    console.log('Restored ride session:', existingRideId)
-    
-    // Start duration update interval
-    if (durationUpdateInterval) {
-      clearInterval(durationUpdateInterval)
+    if (hoursSinceStart > 24) {
+      console.warn('⚠️ Clearing old ride session (>24 hours old)')
+      sessionStorage.clear()
+      // Will start a new ride instead
+    } else {
+      // Restore ride session
+      rideId.value = existingRideId
+      startTime.value = existingStartTime
+      isRideActive.value = true
+      
+      // Restore display values from sessionStorage
+      const savedDistance = sessionStorage.getItem('currentRideDistance')
+      const savedCalories = sessionStorage.getItem('currentRideCalories')
+      const savedSpeed = sessionStorage.getItem('currentRideSpeed')
+      const savedTime = sessionStorage.getItem('currentRideFormattedTime')
+      
+      if (savedDistance) distance.value = savedDistance
+      if (savedCalories) calories.value = savedCalories
+      if (savedSpeed) speed.value = savedSpeed
+      if (savedTime) formatted_time.value = savedTime
+      
+      console.log('Restored ride session:', existingRideId)
+      
+      // Start duration update interval
+      if (durationUpdateInterval) {
+        clearInterval(durationUpdateInterval)
+      }
+      durationUpdateInterval = setInterval(updateDuration, 1000)
+      updateDuration() // Update immediately
     }
-    durationUpdateInterval = setInterval(updateDuration, 1000)
-    updateDuration() // Update immediately
-  } else if (userLocation.value && !isRideActive.value && !rideId.value) {
-    // Auto-start ride if location is already available
-    console.log('Location already available on mount, starting ride...')
-    // Update map center
-    mapCenter.value = {
-      lat: userLocation.value.latitude,
-      lng: userLocation.value.longitude
-    }
-    // Update weather coordinates
-    weatherCoordinates.value = {
-      lat: userLocation.value.latitude,
-      lng: userLocation.value.longitude
-    }
-    // Start ride
-    startRide()
+  }
+  
+  // Start a new ride if no valid session exists
+  if (!rideId.value) {
+    // Wait for first location update, then auto-start ride
+    const unwatch = watch(userLocation, (newLocation) => {
+      if (newLocation && !isRideActive.value && !rideId.value && !isStartingRide.value) {
+        console.log('First location received, auto-starting ride...')
+        // Update map center
+        mapCenter.value = {
+          lat: newLocation.latitude,
+          lng: newLocation.longitude
+        }
+        // Update weather coordinates
+        weatherCoordinates.value = {
+          lat: newLocation.latitude,
+          lng: newLocation.longitude
+        }
+        // Start ride once
+        startRide()
+        // Stop watching after first start
+        unwatch()
+      }
+    })
   }
   
   // Set interval for weather updates (every 20 seconds)
