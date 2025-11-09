@@ -84,9 +84,13 @@ watch(() => route.path, (newPath) => {
 
 const handleFooterClick = () => {
   if (route.path === '/' || route.path === '/home') {
-    router.push('/ride')
+    router.push('/ride').then(() => {
+      window.location.reload();
+    })
   } else if (route.path === '/ride') {
-    router.push('/ride/pause')
+    router.push('/ride/pause').then(() => {
+      window.location.reload();
+    })
   }
 }
 
