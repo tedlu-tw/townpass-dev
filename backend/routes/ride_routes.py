@@ -26,6 +26,22 @@ from database import get_db
 ride_bp = Blueprint('ride', __name__)
 
 
+def parse_utc_timestamp(timestamp_str: str) -> datetime:
+    """
+    Parse ISO timestamp string (with or without 'Z' suffix) to timezone-naive UTC datetime
+    
+    Args:
+        timestamp_str: ISO format timestamp string (e.g., '2025-11-09T00:12:11.508952Z')
+    
+    Returns:
+        datetime object (timezone-naive UTC)
+    """
+    # Remove 'Z' suffix if present (Python's fromisoformat doesn't handle it in < 3.11)
+    if timestamp_str.endswith('Z'):
+        timestamp_str = timestamp_str[:-1]
+    return datetime.fromisoformat(timestamp_str)
+
+
 def validate_required_fields(data: dict, required_fields: list) -> tuple:
     """
     Validate that all required fields are present in the request data
@@ -72,13 +88,13 @@ def start_ride():
         # Generate ride ID
         ride_id = str(uuid.uuid4())
         user_id = data['user_id']
-        start_time = datetime.now()
+        start_time = datetime.utcnow()
         
         # Create session data
         session_data = {
             "ride_id": ride_id,
             "user_id": user_id,
-            "start_time": start_time.isoformat(),
+            "start_time": start_time.isoformat() + 'Z',  # Mark as UTC with 'Z' suffix
             "start_location": data.get('start_location'),  # {lat, lng} GPS coordinates
             "paused_time": 0.0,
             "distance": 0.0,
@@ -105,7 +121,7 @@ def start_ride():
         return jsonify({
             "ride_id": ride_id,
             "user_id": user_id,
-            "start_time": start_time.isoformat(),
+            "start_time": start_time.isoformat() + 'Z',  # Mark as UTC with 'Z' suffix
             "message": "Ride session started."
         }), 201
         
@@ -159,7 +175,13 @@ def update_ride():
         # Check if session exists
         session = db.get_session(ride_id)
         if not session:
+            print(f"❌ Session not found for ride_id: {ride_id}")
+            # List all active sessions for debugging
+            all_sessions = db.sessions_collection.find().limit(5)
+            print(f"📋 Active sessions: {[s.get('ride_id') for s in all_sessions]}")
             return jsonify({"error": "Ride session not found or already finished"}), 404
+        
+        print(f"✅ Found session for ride_id: {ride_id}, status: {session.get('status')}")
         
         # Prepare updates
         updates = {}
@@ -205,7 +227,7 @@ def update_ride():
             route_point = {
                 'lat': location.get('lat'),
                 'lng': location.get('lng'),
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.utcnow().isoformat() + 'Z'  # UTC timestamp with 'Z' suffix
             }
             
             # Calculate distance if we have a previous point
@@ -325,8 +347,8 @@ def finish_ride():
             return jsonify({"error": "Ride session not found or already finished"}), 404
         
         # Calculate final metrics
-        end_time = datetime.now()
-        start_time = datetime.fromisoformat(session['start_time'])
+        end_time = datetime.utcnow()  # Use UTC to match start_time
+        start_time = parse_utc_timestamp(session['start_time'])
         total_duration = (end_time - start_time).total_seconds()
         active_duration = total_duration - session.get('paused_time', 0)
         
@@ -448,8 +470,8 @@ def get_ride_status():
             return jsonify({"error": "Ride session not found"}), 404
         
         # Calculate current duration
-        start_time = datetime.fromisoformat(session['start_time'])
-        current_time = datetime.now()
+        start_time = parse_utc_timestamp(session['start_time'])
+        current_time = datetime.utcnow()  # Use UTC to match start_time
         total_duration = (current_time - start_time).total_seconds()
         active_duration = total_duration - session.get('paused_time', 0)
         
@@ -459,11 +481,11 @@ def get_ride_status():
         
         if len(route) >= 2:
             # Get points from last 30 seconds
-            current_timestamp = datetime.now()
+            current_timestamp = datetime.utcnow()  # Use UTC to match route timestamps
             recent_points = []
             
             for point in reversed(route):
-                point_time = datetime.fromisoformat(point['timestamp'])
+                point_time = parse_utc_timestamp(point['timestamp'])
                 time_diff = (current_timestamp - point_time).total_seconds()
                 if time_diff <= 30:
                     recent_points.insert(0, point)
@@ -488,8 +510,8 @@ def get_ride_status():
                     c = 2 * atan2(sqrt(a), sqrt(1-a))
                     total_distance += 6371000 * c  # meters
                 
-                time_span = (datetime.fromisoformat(recent_points[-1]['timestamp']) - 
-                           datetime.fromisoformat(recent_points[0]['timestamp'])).total_seconds()
+                time_span = (parse_utc_timestamp(recent_points[-1]['timestamp']) - 
+                           parse_utc_timestamp(recent_points[0]['timestamp'])).total_seconds()
                 
                 if time_span > 0:
                     avg_speed = (total_distance / 1000) / (time_span / 3600)  # km/h
