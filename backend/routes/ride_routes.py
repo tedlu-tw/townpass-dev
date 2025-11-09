@@ -25,6 +25,48 @@ from database import get_db
 
 ride_bp = Blueprint('ride', __name__)
 
+# Default user weight for calorie calculation (kg)
+DEFAULT_WEIGHT_KG = 60
+
+
+def calculate_calories(avg_speed_kmh: float, duration_hours: float, weight_kg: float = DEFAULT_WEIGHT_KG) -> float:
+    """
+    Calculate calories burned during cycling using MET (Metabolic Equivalent) values
+    
+    Formula: Calories (kcal) = MET × weight (kg) × time (hours)
+    
+    MET values based on cycling speed:
+    - < 16 km/h: MET = 4.0 (leisurely cycling)
+    - 16-19 km/h: MET = 6.0 (moderate pace)
+    - 19-22 km/h: MET = 8.0 (vigorous pace)
+    - 22-25 km/h: MET = 10.0 (very fast)
+    - > 25 km/h: MET = 12.0 (racing speed)
+    
+    Args:
+        avg_speed_kmh: Average speed in km/h
+        duration_hours: Duration in hours
+        weight_kg: User weight in kg (default: 60)
+    
+    Returns:
+        Calories burned in kcal
+    """
+    # Determine MET value based on speed
+    if avg_speed_kmh < 16:
+        met = 4.0
+    elif avg_speed_kmh < 19:
+        met = 6.0
+    elif avg_speed_kmh < 22:
+        met = 8.0
+    elif avg_speed_kmh < 25:
+        met = 10.0
+    else:
+        met = 12.0
+    
+    # Calculate calories
+    calories = met * weight_kg * duration_hours
+    
+    return calories
+
 
 def parse_utc_timestamp(timestamp_str: str) -> datetime:
     """
@@ -250,11 +292,18 @@ def update_ride():
                 updates['distance'] = new_distance
                 updated_fields['distance_added'] = segment_distance
                 
-                # Calculate calories (rough estimate: 0.0175 * MET * weight * time)
-                # For cycling at moderate pace (~15 km/h), MET ~= 8
-                # Assuming average weight of 70kg
-                # Calories per meter: approximately 0.05 kcal/m for cycling
-                calories_for_segment = segment_distance * 0.05
+                # Calculate calories based on current speed and segment duration
+                # Get time difference between points
+                prev_timestamp = parse_utc_timestamp(prev_point['timestamp'])
+                curr_timestamp = datetime.utcnow()
+                time_diff_hours = (curr_timestamp - prev_timestamp).total_seconds() / 3600
+                
+                # Calculate speed for this segment (km/h)
+                segment_speed_kmh = (segment_distance / 1000) / time_diff_hours if time_diff_hours > 0 else 0
+                
+                # Calculate calories for this segment using MET formula
+                calories_for_segment = calculate_calories(segment_speed_kmh, time_diff_hours, DEFAULT_WEIGHT_KG)
+                
                 current_calories = session.get('calories', 0.0)
                 new_calories = current_calories + calories_for_segment
                 updates['calories'] = new_calories
@@ -357,6 +406,10 @@ def finish_ride():
         # Calculate average speed (distance in km / time in hours)
         avg_speed = (distance_km / (active_duration / 3600)) if active_duration > 0 else 0
         
+        # Recalculate final calories using accurate MET formula based on average speed
+        duration_hours = active_duration / 3600
+        final_calories = calculate_calories(avg_speed, duration_hours, DEFAULT_WEIGHT_KG)
+        
         # Calculate carbon reduction (assuming 120g CO2 per km for cars)
         carbon_reduction = distance_km * 0.12  # kg
         
@@ -366,7 +419,7 @@ def finish_ride():
             "end_time": end_time.isoformat(),
             "duration": int(active_duration),  # seconds as int
             "distance": int(session.get('distance', 0)),  # meters as int
-            "calories": int(session.get('calories', 0)),  # as int
+            "calories": int(final_calories),  # as int, calculated with MET formula
             "avg_speed": round(avg_speed, 2),  # km/h as float
             "max_speed": float(session.get('max_speed', 0)),  # km/h as float
             "route": session.get('route', []),  # array of {lat, lng, timestamp}
@@ -383,13 +436,13 @@ def finish_ride():
         # Remove from active sessions
         db.delete_session(ride_id)
         
-        # Prepare summary
+        # Prepare summary with accurate calorie count
         summary = {
             "duration_minutes": round(active_duration / 60, 1),
             "distance_km": round(distance_km, 2),
             "avg_speed_kmh": round(avg_speed, 2),
             "max_speed_kmh": round(session.get('max_speed', 0), 2),
-            "calories": round(session.get('calories', 0), 2),
+            "calories": round(final_calories, 2),
             "carbon_saved_kg": round(carbon_reduction, 3)
         }
         
@@ -519,17 +572,26 @@ def get_ride_status():
         # Get current location
         current_location = session.get('current_location', session.get('start_location'))
         
+        # Calculate overall average speed and calories
+        distance_km = session.get('distance', 0.0) / 1000
+        overall_avg_speed = (distance_km / (active_duration / 3600)) if active_duration > 0 else 0
+        
+        # Calculate calories based on overall average speed and duration
+        duration_hours = active_duration / 3600
+        calculated_calories = calculate_calories(overall_avg_speed, duration_hours, DEFAULT_WEIGHT_KG)
+        
         # Return status
         return jsonify({
             "ride_id": ride_id,
             "status": session.get('status', 'active'),
             "duration_seconds": int(active_duration),
-            "distance_km": session.get('distance', 0.0) / 1000,
-            "avg_speed_kmh": round(avg_speed, 1),
+            "distance_km": round(distance_km, 2),
+            "avg_speed_kmh": round(overall_avg_speed, 1),
             "max_speed_kmh": round(session.get('max_speed', 0.0), 1),
-            "calories": round(session.get('calories', 0.0), 1),
+            "calories": round(calculated_calories, 1),
             "current_location": current_location,
-            "route_points": len(route)
+            "route_points": len(route),
+            "start_location": session.get('start_location')
         }), 200
         
     except Exception as e:
