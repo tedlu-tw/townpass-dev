@@ -48,11 +48,32 @@ class Database:
             else:
                 print("☁️  Connecting to MongoDB Atlas...")
             
-            # Create client with timeout
-            self.client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+            # Create client with better timeout and connection pool settings
+            # Optimized for Cloud Run serverless environment
+            # Let pymongo handle TLS automatically with mongodb+srv:// URIs
+            # Don't specify tlsCAFile - let Python's default SSL context handle it
+            self.client = MongoClient(
+                uri,
+                serverSelectionTimeoutMS=5000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=10000,
+                maxPoolSize=10,
+                minPoolSize=1,
+                maxIdleTimeMS=45000  # Keep connections alive for 45s
+            )
             
-            # Test connection
-            self.client.admin.command('ping')
+            # Test connection with retry
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self.client.admin.command('ping')
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise
+                    print(f"⚠️  Connection attempt {attempt + 1} failed, retrying...")
+                    import time
+                    time.sleep(0.5)
             
             # Get database (create if doesn't exist)
             db_name = os.getenv('MONGODB_DB_NAME', 'townpass')
@@ -81,13 +102,13 @@ class Database:
     
     def is_connected(self) -> bool:
         """Check if connected to MongoDB"""
-        try:
-            if self.client:
-                self.client.admin.command('ping')
-                return True
-        except:
-            pass
-        return False
+        # Simple check - just verify client and collections exist
+        # Don't ping on every request as it's expensive
+        return (
+            self.client is not None and 
+            self.db is not None and 
+            self.sessions_collection is not None
+        )
     
     # ==================== User Operations ====================
     
@@ -465,5 +486,9 @@ def init_database():
 
 
 def get_db() -> Database:
-    """Get database instance"""
+    """Get database instance with auto-reconnect"""
+    # If database is not connected, try to connect
+    if not db.is_connected():
+        print("⚠️  Database not connected, attempting to reconnect...")
+        db.connect()
     return db

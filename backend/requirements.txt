@@ -2,5 +2,6 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 Flask>=3.0.0
 Flask-CORS>=4.0.0
-pymongo>=4.6.0
+pymongo[srv]>=4.6.0
+certifi>=2023.7.22
 gunicorn>=21.2.0

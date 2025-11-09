@@ -2,6 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install CA certificates and other system dependencies for MongoDB SSL/TLS
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements first (for layer caching)
 COPY requirements.txt .
 
