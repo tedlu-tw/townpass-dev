@@ -63,6 +63,7 @@ const { location: userLocation, startWatching, stopWatching } = useGeoLocation()
 const weatherCoordinates = ref(null)
 let weatherUpdateInterval = null
 let rideUpdateInterval = null
+let rideStatusInterval = null
 let durationUpdateInterval = null
 let lastWeatherUpdate = 0
 
@@ -161,6 +162,16 @@ const startRide = async () => {
       }
       durationUpdateInterval = setInterval(updateDuration, 1000)
       updateDuration() // Update immediately
+      
+      // Start status polling for new ride
+      if (rideStatusInterval) {
+        clearInterval(rideStatusInterval)
+      }
+      rideStatusInterval = setInterval(() => {
+        if (isRideActive.value && rideId.value) {
+          fetchRideStatus()
+        }
+      }, 3000)
     } else {
       console.error('Failed to start ride:', data.error)
     }
@@ -194,6 +205,33 @@ const sendRideUpdate = async () => {
     }
   } catch (error) {
     console.error('Error sending ride update:', error)
+  }
+}
+
+// Fetch current ride status from backend to update distance, speed, calories
+const fetchRideStatus = async () => {
+  if (!rideId.value) return
+  
+  try {
+    const response = await fetch(`${apiUrl}/api/ride/status?ride_id=${rideId.value}`)
+    const data = await response.json()
+    
+    if (response.ok) {
+      // Update display values with backend calculations
+      distance.value = data.distance_km.toFixed(2)
+      speed.value = data.avg_speed_kmh.toFixed(1)
+      calories.value = Math.round(data.calories).toString()
+      
+      console.log('📊 Ride status updated:', {
+        distance: data.distance_km,
+        speed: data.avg_speed_kmh,
+        calories: data.calories
+      })
+    } else {
+      console.error('Failed to fetch ride status:', data.error)
+    }
+  } catch (error) {
+    console.error('Error fetching ride status:', error)
   }
 }
 
@@ -277,6 +315,17 @@ onMounted(() => {
       }
       durationUpdateInterval = setInterval(updateDuration, 1000)
       updateDuration() // Update immediately
+      
+      // Start status polling for restored session
+      if (rideStatusInterval) {
+        clearInterval(rideStatusInterval)
+      }
+      rideStatusInterval = setInterval(() => {
+        if (isRideActive.value && rideId.value) {
+          fetchRideStatus()
+        }
+      }, 3000)
+      fetchRideStatus() // Fetch immediately to get current values
     }
   }
   
@@ -320,6 +369,13 @@ onMounted(() => {
       sendRideUpdate()
     }
   }, 5000)
+  
+  // Set interval for ride status updates (every 3 seconds) - fetch distance, speed, calories
+  rideStatusInterval = setInterval(() => {
+    if (isRideActive.value && rideId.value) {
+      fetchRideStatus()
+    }
+  }, 3000)
 })
 
 onUnmounted(() => {
@@ -331,6 +387,10 @@ onUnmounted(() => {
   
   if (rideUpdateInterval) {
     clearInterval(rideUpdateInterval)
+  }
+  
+  if (rideStatusInterval) {
+    clearInterval(rideStatusInterval)
   }
   
   if (durationUpdateInterval) {
